@@ -1,0 +1,100 @@
+﻿<Window x:Class="MasterSlave.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Master-Slave Demo" Height="720" Width="1000">
+    <Grid Margin="10">
+        <TabControl>
+            <!-- MASTER -->
+            <TabItem Header="Master">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="200"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock VerticalAlignment="Center" Text="Port:" Margin="0,4"/>
+                        <TextBox x:Name="MasterPortBox" Width="80" Text="5000" Margin="6,0"/>
+                        <Button x:Name="MasterStartBtn" Content="Start Master" Click="MasterStartBtn_Click" Margin="8,0"/>
+                        <Button x:Name="MasterStopBtn" Content="Stop Master" Click="MasterStopBtn_Click" Margin="6,0" IsEnabled="False"/>
+                        <TextBlock Text="Slaves:" Margin="16,6,0,0" VerticalAlignment="Center"/>
+                        <ListBox x:Name="SlaveListBox" Width="250" Margin="6,0"/>
+                    </StackPanel>
+
+                    <GroupBox Header="Logs" Grid.Row="1" Margin="0,0,0,8">
+                        <ListBox x:Name="MasterLog" />
+                    </GroupBox>
+
+                    <GroupBox Header="Similarity results (pairs)" Grid.Row="2">
+                        <DataGrid x:Name="MasterMatrixGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Text A" Binding="{Binding A}" Width="*"/>
+                                <DataGridTextColumn Header="Text B" Binding="{Binding B}" Width="*"/>
+                                <DataGridTextColumn Header="Similarity" Binding="{Binding Sim, StringFormat=0.000}" Width="120"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- SLAVE -->
+            <TabItem Header="Slave">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Slave ID:" VerticalAlignment="Center"/>
+                        <TextBox x:Name="SlaveIdBox" Width="200" Margin="6,0" Text="slave-01"/>
+                        <TextBlock Text="Host:" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        <TextBox x:Name="SlaveHostBox" Width="120" Margin="6,0" Text="127.0.0.1"/>
+                        <TextBlock Text="Port:" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        <TextBox x:Name="SlavePortBox" Width="80" Margin="6,0" Text="5000"/>
+                        <Button Content="Start Slave" Click="StartSlaveBtn_Click" Margin="8,0"/>
+                        <Button Content="Stop Slave" Click="StopSlaveBtn_Click" Margin="6,0" IsEnabled="False" x:Name="StopSlaveBtn"/>
+                    </StackPanel>
+
+                    <GroupBox Header="Slave Logs" Grid.Row="1">
+                        <ListBox x:Name="SlaveLog"/>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- CLIENT -->
+            <TabItem Header="Client">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="130"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Client ID:" VerticalAlignment="Center"/>
+                        <TextBox x:Name="ClientIdBox" Width="160" Margin="6,0" Text="client1"/>
+                        <TextBlock Text="Host:" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        <TextBox x:Name="ClientHostBox" Width="120" Margin="6,0" Text="127.0.0.1"/>
+                        <TextBlock Text="Port:" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        <TextBox x:Name="ClientPortBox" Width="80" Margin="6,0" Text="5000"/>
+                        <Button Content="Submit Texts" Click="SubmitBtn_Click" Margin="8,0"/>
+                    </StackPanel>
+
+                    <GroupBox Header="Texts (one per line)" Grid.Row="1" Margin="0,0,0,8">
+                        <TextBox x:Name="ClientTextsBox" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
+                    </GroupBox>
+
+                    <GroupBox Header="Similarity Results" Grid.Row="2">
+                        <DataGrid x:Name="ClientMatrixGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Text A" Binding="{Binding A}" Width="*"/>
+                                <DataGridTextColumn Header="Text B" Binding="{Binding B}" Width="*"/>
+                                <DataGridTextColumn Header="Similarity" Binding="{Binding Sim, StringFormat=0.000}" Width="120"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
