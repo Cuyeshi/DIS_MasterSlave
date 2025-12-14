@@ -1,10 +1,14 @@
-﻿using System;
+﻿using MasterSlave.Slave;
+using MasterSlave.Client;
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 
 namespace MasterSlave
 {
@@ -91,6 +95,39 @@ namespace MasterSlave
                 foreach (var b in keys)
                     coll.Add(new MatrixEntry { A = a, B = b, Sim = matrix[a][b] });
         }
+
+        private void LoadFileButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog();
+            dialog.Filter = "Text files (*.txt)|*.txt";
+            dialog.Multiselect = false;
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
+                {
+                    var lines = File.ReadAllLines(dialog.FileName, Encoding.UTF8);
+
+                    // Если хочешь просто заменить всё содержимое — используем:
+                    // ClientTextsBox.Text = string.Join("\n", lines);
+
+                    // Но лучше добавить строки к тому, что есть:
+                    if (!string.IsNullOrWhiteSpace(ClientTextsBox.Text))
+                        ClientTextsBox.AppendText("\n");
+
+                    foreach (var line in lines)
+                        ClientTextsBox.AppendText(line + "\n");
+
+                    ClientTextsBox.ScrollToEnd();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Ошибка чтения файла: " + ex.Message, "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
     }
 
     public class MatrixEntry

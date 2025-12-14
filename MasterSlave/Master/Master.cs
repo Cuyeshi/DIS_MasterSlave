@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json;
+﻿using MasterSlave.Backend;
+using MasterSlave.DTO;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -7,56 +9,10 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace MasterSlave
 {
-    // DTOs (как у тебя)
-    public class TextItem { public string id { get; set; } public string text { get; set; } }
-    public class SubmitMessage { public string type { get; set; } = "submit"; public string clientId { get; set; } public TextItem[] texts { get; set; } }
-    public class RegisterMessage { public string type { get; set; } = "register"; public string role { get; set; } public string slaveId { get; set; } }
-    public class TaskAssign { public string type { get; set; } = "task"; public string taskId { get; set; } public TextItem[] texts { get; set; } }
-    public class TaskResultItem { public string id { get; set; } public System.Collections.Generic.Dictionary<string, int> counts { get; set; } public long processingMs { get; set; } }
-    public class TaskResult { public string type { get; set; } = "result"; public string slaveId { get; set; } public string taskId { get; set; } public TaskResultItem[] results { get; set; } }
-    public class SimilarityResponse { public string type { get; set; } = "similarity"; public string clientId { get; set; } public System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, double>> matrix { get; set; } }
-
-    public static class TcpHelpers
-    {
-        public static async Task SendJsonAsync(NetworkStream stream, object obj)
-        {
-            var json = JsonConvert.SerializeObject(obj);
-            var bytes = Encoding.UTF8.GetBytes(json);
-            var len = BitConverter.GetBytes(bytes.Length);
-            await stream.WriteAsync(len, 0, len.Length);
-            await stream.WriteAsync(bytes, 0, bytes.Length);
-            await stream.FlushAsync();
-        }
-
-        public static async Task<string> ReadJsonStringAsync(NetworkStream stream)
-        {
-            var lenBuf = new byte[4];
-            int read = 0;
-            while (read < 4)
-            {
-                int r = await stream.ReadAsync(lenBuf, read, 4 - read);
-                if (r == 0) throw new IOException("Socket closed");
-                read += r;
-            }
-            int len = BitConverter.ToInt32(lenBuf, 0);
-            var buf = new byte[len];
-            int got = 0;
-            while (got < len)
-            {
-                int r = await stream.ReadAsync(buf, got, len - got);
-                if (r == 0) throw new IOException("Socket closed");
-                got += r;
-            }
-            return Encoding.UTF8.GetString(buf);
-        }
-    }
-
-    // Простая запись логов через событие
     public class Master
     {
         private readonly int port;
@@ -290,129 +246,6 @@ namespace MasterSlave
             for (int i = 0; i < a.Length; i++) { num += a[i] * b[i]; da += a[i] * a[i]; db += b[i] * b[i]; }
             if (da == 0 || db == 0) return 0;
             return num / (Math.Sqrt(da) * Math.Sqrt(db));
-        }
-    }
-
-    public class SlaveNode
-    {
-        private string slaveId;
-        private string masterHost;
-        private int masterPort;
-        private CancellationTokenSource cts;
-        public event Action<string> OnLog;
-
-        public SlaveNode(string id, string host = "127.0.0.1", int port = 5000)
-        {
-            slaveId = id; masterHost = host; masterPort = port;
-        }
-
-        public void Start()
-        {
-            if (cts != null) return;
-            cts = new CancellationTokenSource();
-            _ = RunAsync(cts.Token);
-        }
-
-        public void Stop()
-        {
-            if (cts == null) return;
-            cts.Cancel();
-            cts = null;
-        }
-
-        private async Task RunAsync(CancellationToken token)
-        {
-            try
-            {
-                using var client = new TcpClient();
-                await client.ConnectAsync(masterHost, masterPort);
-                var stream = client.GetStream();
-
-                var reg = new RegisterMessage { role = "slave", slaveId = slaveId };
-                await TcpHelpers.SendJsonAsync(stream, reg);
-                OnLog?.Invoke("Registered as " + slaveId);
-
-                while (client.Connected && !token.IsCancellationRequested)
-                {
-                    try
-                    {
-                        var s = await TcpHelpers.ReadJsonStringAsync(stream);
-                        var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(s);
-                        if (obj != null && obj.TryGetValue("type", out var t) && t.ToString() == "task")
-                        {
-                            var task = JsonConvert.DeserializeObject<TaskAssign>(s);
-                            OnLog?.Invoke($"Received task {task.taskId} with {task.texts.Length} texts");
-                            var results = new List<TaskResultItem>();
-                            foreach (var txt in task.texts)
-                            {
-                                var sw = System.Diagnostics.Stopwatch.StartNew();
-                                var counts = CountWords(txt.text);
-                                sw.Stop();
-                                results.Add(new TaskResultItem { id = txt.id, counts = counts, processingMs = sw.ElapsedMilliseconds });
-                                await Task.Delay(10, token).ContinueWith(_ => { });
-                            }
-                            var resMsg = new TaskResult { slaveId = slaveId, taskId = task.taskId, results = results.ToArray() };
-                            await TcpHelpers.SendJsonAsync(stream, resMsg);
-                            OnLog?.Invoke($"Sent results for {task.taskId}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        OnLog?.Invoke("Slave error: " + ex.Message);
-                        break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                OnLog?.Invoke("Slave connection failed: " + ex.Message);
-            }
-            finally
-            {
-                OnLog?.Invoke("Slave stopped");
-            }
-        }
-
-        private Dictionary<string, int> CountWords(string text)
-        {
-            var dict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var tokens = System.Text.RegularExpressions.Regex.Matches(text.ToLowerInvariant(), @"\p{L}[\p{L}\p{N}]*");
-            foreach (System.Text.RegularExpressions.Match m in tokens)
-            {
-                var w = m.Value;
-                if (!dict.ContainsKey(w)) dict[w] = 0;
-                dict[w]++;
-            }
-            return dict;
-        }
-    }
-
-    public class ClientApp
-    {
-        public event Action<string> OnLog;
-        public async Task<Dictionary<string, Dictionary<string, double>>> SubmitAsync(string host, int port, string clientId, List<string> texts)
-        {
-            try
-            {
-                using var client = new TcpClient();
-                await client.ConnectAsync(host, port);
-                var stream = client.GetStream();
-
-                var items = texts.Select((t, i) => new TextItem { id = "t" + (i + 1), text = t }).ToArray();
-                var submit = new SubmitMessage { clientId = clientId, texts = items };
-                await TcpHelpers.SendJsonAsync(stream, submit);
-                OnLog?.Invoke($"Submitted {items.Length} texts");
-
-                var respJson = await TcpHelpers.ReadJsonStringAsync(stream);
-                var resp = JsonConvert.DeserializeObject<SimilarityResponse>(respJson);
-                OnLog?.Invoke("Received similarity response");
-                return resp.matrix;
-            }
-            catch (Exception ex)
-            {
-                OnLog?.Invoke("Client error: " + ex.Message);
-                return null;
-            }
         }
     }
 }

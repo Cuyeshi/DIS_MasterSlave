@@ -78,9 +78,13 @@
                         <TextBlock Text="Port:" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         <TextBox x:Name="ClientPortBox" Width="80" Margin="6,0" Text="5000"/>
                         <Button Content="Submit Texts" Click="SubmitBtn_Click" Margin="8,0"/>
+                        <Button x:Name="LoadFileButton" Content="Load .txt" Width="70" Click="LoadFileButton_Click" Margin="150,0,0,0"/>
                     </StackPanel>
 
+                    
+                    
                     <GroupBox Header="Texts (one per line)" Grid.Row="1" Margin="0,0,0,8">
+                        
                         <TextBox x:Name="ClientTextsBox" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
                     </GroupBox>
 
