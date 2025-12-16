@@ -13,6 +13,7 @@ namespace MasterSlave.Client
     public class ClientApp
     {
         public event Action<string> OnLog;
+
         public async Task<Dictionary<string, Dictionary<string, double>>> SubmitAsync(string host, int port, string clientId, List<string> texts)
         {
             try
@@ -23,12 +24,20 @@ namespace MasterSlave.Client
 
                 var items = texts.Select((t, i) => new TextItem { id = "t" + (i + 1), text = t }).ToArray();
                 var submit = new SubmitMessage { clientId = clientId, texts = items };
+
+                // --- НАЧАЛО ЗАМЕРА ---
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+
                 await TcpHelpers.SendJsonAsync(stream, submit);
-                OnLog?.Invoke($"Submitted {items.Length} texts");
+                OnLog?.Invoke($"Submitted {items.Length} texts. Waiting...");
 
                 var respJson = await TcpHelpers.ReadJsonStringAsync(stream);
                 var resp = JsonConvert.DeserializeObject<SimilarityResponse>(respJson);
-                OnLog?.Invoke("Received similarity response");
+
+                sw.Stop();
+                // --- КОНЕЦ ЗАМЕРА ---
+
+                OnLog?.Invoke($"Response received in {sw.ElapsedMilliseconds} ms"); // Логируем время
                 return resp.matrix;
             }
             catch (Exception ex)
@@ -37,7 +46,5 @@ namespace MasterSlave.Client
                 return null;
             }
         }
-
-
     }
 }

@@ -41,6 +41,8 @@ namespace MasterSlave
             if (!int.TryParse(MasterPortBox.Text, out var port)) { MessageBox.Show("Invalid port"); return; }
             master = new Master(port);
             master.OnLog += (s) => Dispatcher.Invoke(() => masterLogs.Add(s));
+            // !ПОДПИСЫВАЕМСЯ НА СТАТИСТИКУ
+            master.OnStatsUpdate += (stats) => Dispatcher.Invoke(() => StatsBlock.Text = stats);
             master.OnSlaveListChanged += (list) => Dispatcher.Invoke(() => { slaveList.Clear(); foreach (var l in list) slaveList.Add(l); });
             master.OnMatrixReady += (m) => Dispatcher.Invoke(() => { FillMatrix(masterMatrix, m); });
 

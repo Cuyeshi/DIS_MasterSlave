@@ -3,7 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Master-Slave Demo" Height="720" Width="1000">
     <Grid Margin="10">
-        <TabControl>
+        <!-- Разделяем окно на основную часть (Табы) и подвал (Статистика) -->
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TabControl Grid.Row="0">
             <!-- MASTER -->
             <TabItem Header="Master">
                 <Grid Margin="8">
@@ -12,25 +18,26 @@
                         <RowDefinition Height="200"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
+
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <TextBlock VerticalAlignment="Center" Text="Port:" Margin="0,4"/>
-                        <TextBox x:Name="MasterPortBox" Width="80" Text="5000" Margin="6,0"/>
-                        <Button x:Name="MasterStartBtn" Content="Start Master" Click="MasterStartBtn_Click" Margin="8,0"/>
-                        <Button x:Name="MasterStopBtn" Content="Stop Master" Click="MasterStopBtn_Click" Margin="6,0" IsEnabled="False"/>
-                        <TextBlock Text="Slaves:" Margin="16,6,0,0" VerticalAlignment="Center"/>
-                        <ListBox x:Name="SlaveListBox" Width="250" Margin="6,0"/>
+                        <TextBox x:Name="MasterPortBox" Width="80" Text="5000" Margin="6,0" VerticalContentAlignment="Center"/>
+                        <Button x:Name="MasterStartBtn" Content="Start Master" Click="MasterStartBtn_Click" Margin="8,0" Padding="10,2"/>
+                        <Button x:Name="MasterStopBtn" Content="Stop Master" Click="MasterStopBtn_Click" Margin="6,0" IsEnabled="False" Padding="10,2"/>
+                        <TextBlock Text="Slaves:" Margin="16,6,0,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <ListBox x:Name="SlaveListBox" Width="250" Margin="6,0" BorderBrush="Gray"/>
                     </StackPanel>
 
                     <GroupBox Header="Logs" Grid.Row="1" Margin="0,0,0,8">
-                        <ListBox x:Name="MasterLog" />
+                        <ListBox x:Name="MasterLog" FontFamily="Consolas" FontSize="11"/>
                     </GroupBox>
 
                     <GroupBox Header="Similarity results (pairs)" Grid.Row="2">
-                        <DataGrid x:Name="MasterMatrixGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid x:Name="MasterMatrixGrid" AutoGenerateColumns="False" IsReadOnly="True" AlternatingRowBackground="#F0F0F0">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Text A" Binding="{Binding A}" Width="*"/>
                                 <DataGridTextColumn Header="Text B" Binding="{Binding B}" Width="*"/>
-                                <DataGridTextColumn Header="Similarity" Binding="{Binding Sim, StringFormat=0.000}" Width="120"/>
+                                <DataGridTextColumn Header="Similarity" Binding="{Binding Sim, StringFormat=0.000}" Width="120" FontWeight="Bold"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </GroupBox>
@@ -46,17 +53,17 @@
                     </Grid.RowDefinitions>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <TextBlock Text="Slave ID:" VerticalAlignment="Center"/>
-                        <TextBox x:Name="SlaveIdBox" Width="200" Margin="6,0" Text="slave-01"/>
+                        <TextBox x:Name="SlaveIdBox" Width="150" Margin="6,0" Text="slave-01" VerticalContentAlignment="Center"/>
                         <TextBlock Text="Host:" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                        <TextBox x:Name="SlaveHostBox" Width="120" Margin="6,0" Text="127.0.0.1"/>
+                        <TextBox x:Name="SlaveHostBox" Width="120" Margin="6,0" Text="127.0.0.1" VerticalContentAlignment="Center"/>
                         <TextBlock Text="Port:" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                        <TextBox x:Name="SlavePortBox" Width="80" Margin="6,0" Text="5000"/>
-                        <Button Content="Start Slave" Click="StartSlaveBtn_Click" Margin="8,0"/>
-                        <Button Content="Stop Slave" Click="StopSlaveBtn_Click" Margin="6,0" IsEnabled="False" x:Name="StopSlaveBtn"/>
+                        <TextBox x:Name="SlavePortBox" Width="60" Margin="6,0" Text="5000" VerticalContentAlignment="Center"/>
+                        <Button Content="Start Slave" Click="StartSlaveBtn_Click" Margin="8,0" Padding="10,2"/>
+                        <Button Content="Stop Slave" Click="StopSlaveBtn_Click" Margin="6,0" IsEnabled="False" x:Name="StopSlaveBtn" Padding="10,2"/>
                     </StackPanel>
 
                     <GroupBox Header="Slave Logs" Grid.Row="1">
-                        <ListBox x:Name="SlaveLog"/>
+                        <ListBox x:Name="SlaveLog" FontFamily="Consolas" FontSize="11"/>
                     </GroupBox>
                 </Grid>
             </TabItem>
@@ -66,39 +73,45 @@
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="130"/>
+                        <RowDefinition Height="150"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <TextBlock Text="Client ID:" VerticalAlignment="Center"/>
-                        <TextBox x:Name="ClientIdBox" Width="160" Margin="6,0" Text="client1"/>
+                        <TextBox x:Name="ClientIdBox" Width="120" Margin="6,0" Text="client1" VerticalContentAlignment="Center"/>
                         <TextBlock Text="Host:" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                        <TextBox x:Name="ClientHostBox" Width="120" Margin="6,0" Text="127.0.0.1"/>
+                        <TextBox x:Name="ClientHostBox" Width="100" Margin="6,0" Text="127.0.0.1" VerticalContentAlignment="Center"/>
                         <TextBlock Text="Port:" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                        <TextBox x:Name="ClientPortBox" Width="80" Margin="6,0" Text="5000"/>
-                        <Button Content="Submit Texts" Click="SubmitBtn_Click" Margin="8,0"/>
-                        <Button x:Name="LoadFileButton" Content="Load .txt" Width="70" Click="LoadFileButton_Click" Margin="150,0,0,0"/>
+                        <TextBox x:Name="ClientPortBox" Width="60" Margin="6,0" Text="5000" VerticalContentAlignment="Center"/>
+                        <Button Content="Submit Texts" Click="SubmitBtn_Click" Margin="8,0" Padding="10,2" FontWeight="Bold"/>
+                        <Button x:Name="LoadFileButton" Content="📂 Load .txt" Width="90" Click="LoadFileButton_Click" Margin="50,0,0,0"/>
                     </StackPanel>
 
-                    
-                    
-                    <GroupBox Header="Texts (one per line)" Grid.Row="1" Margin="0,0,0,8">
-                        
-                        <TextBox x:Name="ClientTextsBox" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
+                    <GroupBox Header="Input Texts (one per line)" Grid.Row="1" Margin="0,0,0,8">
+                        <TextBox x:Name="ClientTextsBox" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas"/>
                     </GroupBox>
 
                     <GroupBox Header="Similarity Results" Grid.Row="2">
-                        <DataGrid x:Name="ClientMatrixGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid x:Name="ClientMatrixGrid" AutoGenerateColumns="False" IsReadOnly="True" AlternatingRowBackground="#F0F0F0">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Text A" Binding="{Binding A}" Width="*"/>
                                 <DataGridTextColumn Header="Text B" Binding="{Binding B}" Width="*"/>
-                                <DataGridTextColumn Header="Similarity" Binding="{Binding Sim, StringFormat=0.000}" Width="120"/>
+                                <DataGridTextColumn Header="Similarity" Binding="{Binding Sim, StringFormat=0.000}" Width="120" FontWeight="Bold"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </GroupBox>
                 </Grid>
             </TabItem>
         </TabControl>
+
+        <!-- НИЖНЯЯ ПАНЕЛЬ СО СТАТИСТИКОЙ -->
+        <Border Grid.Row="1" Background="#F5F5F5" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="4" Margin="0,5,0,0" Padding="10,5">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Performance Metrics: " FontWeight="Bold" Foreground="#333" VerticalAlignment="Center"/>
+                <!-- Сюда будем выводить данные из C# -->
+                <TextBlock x:Name="StatsBlock" Text="Ready to start." Foreground="#0066CC" Margin="10,0,0,0" VerticalAlignment="Center" FontFamily="Segoe UI Semibold"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

@@ -15,12 +15,18 @@ namespace MasterSlave
 {
     public class Master
     {
+        public event Action<string> OnStatsUpdate; // Событие для статистики
+
+
         private readonly int port;
         private TcpListener listener;
         private CancellationTokenSource cts;
         private ConcurrentDictionary<string, TcpClient> slaves = new();
         private ConcurrentQueue<TextItem> taskQueue = new();
+
+        // Храним результаты: ID документа -> Словарь {Слово: Количество}
         private ConcurrentDictionary<string, Dictionary<string, int>> textCounts = new();
+
         private ConcurrentDictionary<string, TaskCompletionSource<bool>> textCompletion = new();
         private object slaveLock = new();
         private List<string> slaveOrder = new();
@@ -66,8 +72,7 @@ namespace MasterSlave
                     _ = HandleConnection(client);
                 }
             }
-            catch (ObjectDisposedException) { }
-            catch (Exception ex) { OnLog?.Invoke("AcceptLoop error: " + ex.Message); }
+            catch { }
         }
 
         private async Task HandleConnection(TcpClient client)
@@ -77,6 +82,7 @@ namespace MasterSlave
                 var stream = client.GetStream();
                 var firstJson = await TcpHelpers.ReadJsonStringAsync(stream);
                 var baseObj = JsonConvert.DeserializeObject<Dictionary<string, object>>(firstJson);
+
                 if (baseObj != null && baseObj.TryGetValue("type", out var t) && t.ToString() == "register")
                 {
                     var reg = JsonConvert.DeserializeObject<RegisterMessage>(firstJson);
@@ -93,19 +99,49 @@ namespace MasterSlave
                 else if (baseObj != null && baseObj.TryGetValue("type", out var tt) && tt.ToString() == "submit")
                 {
                     var sub = JsonConvert.DeserializeObject<SubmitMessage>(firstJson);
-                    OnLog?.Invoke($"Client submitted {sub.texts.Length} texts from {sub.clientId}");
+                    OnLog?.Invoke($"[Master] Client {sub.clientId} submitted {sub.texts.Length} texts.");
+
+                    // 1. Таймер полного цикла
+                    var totalSw = System.Diagnostics.Stopwatch.StartNew();
+
+                    // Очистка и постановка в очередь
+                    foreach (var txt in sub.texts) textCounts.TryRemove(txt.id, out _);
                     foreach (var titem in sub.texts)
                     {
                         taskQueue.Enqueue(titem);
                         textCompletion[titem.id] = new TaskCompletionSource<bool>();
                     }
+
                     var tasks = sub.texts.Select(it => textCompletion[it.id].Task).ToArray();
                     var all = Task.WhenAll(tasks);
+
+                    // 2. Таймер ожидания Слейвов (Сетевая задержка + работа Слейвов)
+                    var waitSw = System.Diagnostics.Stopwatch.StartNew();
                     if (await Task.WhenAny(all, Task.Delay(30000)) != all)
                     {
                         OnLog?.Invoke("Timeout waiting for slaves");
                     }
-                    var matrix = BuildSimilarityMatrix(sub.texts.Select(x => x.id).ToArray());
+                    waitSw.Stop();
+
+                    // 3. Таймер расчета математики (BM25 + Cosine)
+                    OnLog?.Invoke($"[Master] Slaves finished in {waitSw.ElapsedMilliseconds} ms. Building matrix...");
+                    var calcSw = System.Diagnostics.Stopwatch.StartNew();
+
+                    // ВАЖНО: Вызов твоего калькулятора (встроенного или вынесенного)
+                    var matrix = Bm25Calculator.Calculate(textCounts.ToDictionary(k => k.Key, v => v.Value));
+                    // Или var matrix = BuildSimilarityMatrix(...);
+
+                    calcSw.Stop();
+                    totalSw.Stop();
+
+                    OnLog?.Invoke($"[Master] Matrix calc time: {calcSw.ElapsedMilliseconds} ms");
+                    OnLog?.Invoke($"[Master] Total Request time: {totalSw.ElapsedMilliseconds} ms");
+
+                    string statsMsg = $"Last Run: Slaves Wait: {waitSw.ElapsedMilliseconds}ms | " +
+                                  $"Math Calc: {calcSw.ElapsedMilliseconds}ms | " +
+                                  $"Total: {totalSw.ElapsedMilliseconds}ms";
+                    OnStatsUpdate?.Invoke(statsMsg);
+
                     var resp = new SimilarityResponse { clientId = sub.clientId, matrix = matrix };
                     await TcpHelpers.SendJsonAsync(stream, resp);
                     OnLog?.Invoke($"Responded to client {sub.clientId}");
@@ -113,13 +149,11 @@ namespace MasterSlave
                     OnMatrixReady?.Invoke(matrix);
                     return;
                 }
-
-                OnLog?.Invoke("Unknown initial message, closing.");
                 client.Close();
             }
             catch (Exception ex)
             {
-                OnLog?.Invoke("HandleConnection error: " + ex.Message);
+                OnLog?.Invoke("Connection error: " + ex.Message);
                 try { client.Close(); } catch { }
             }
         }
@@ -140,20 +174,18 @@ namespace MasterSlave
                         {
                             textCounts[r.id] = r.counts;
                             if (textCompletion.TryGetValue(r.id, out var tcs)) tcs.TrySetResult(true);
-                            OnLog?.Invoke($"Received result for {r.id} from {res.slaveId} in {r.processingMs}ms");
                         }
+                        OnLog?.Invoke($"Received results from {slaveId}");
                     }
                 }
             }
-            catch (IOException) { /* connection closed */ }
-            catch (Exception ex) { OnLog?.Invoke("ListenSlave error: " + ex.Message); }
+            catch { }
             finally
             {
                 OnLog?.Invoke($"Slave disconnected: {slaveId}");
                 slaves.TryRemove(slaveId, out _);
                 lock (slaveLock) { slaveOrder.Remove(slaveId); }
                 OnSlaveListChanged?.Invoke(slaveOrder.ToList());
-                try { client.Close(); } catch { }
             }
         }
 
@@ -161,91 +193,136 @@ namespace MasterSlave
         {
             while (!token.IsCancellationRequested)
             {
-                if (taskQueue.IsEmpty || slaveOrder.Count == 0)
-                {
-                    await Task.Delay(100, token).ContinueWith(_ => { });
-                    continue;
-                }
+                if (taskQueue.IsEmpty || slaveOrder.Count == 0) { await Task.Delay(100, token); continue; }
 
                 List<string> currentSlaves;
                 lock (slaveLock) { currentSlaves = slaveOrder.ToList(); }
-                int n = currentSlaves.Count;
-                if (n == 0) { await Task.Delay(100, token).ContinueWith(_ => { }); continue; }
+                if (currentSlaves.Count == 0) continue;
 
-                var assignments = new Dictionary<string, List<TextItem>>();
-                for (int i = 0; i < n; i++) assignments[currentSlaves[i]] = new List<TextItem>();
+                var batch = new Dictionary<string, List<TextItem>>();
+                foreach (var s in currentSlaves) batch[s] = new List<TextItem>();
 
-                int assigned = 0;
-                while (assigned < n && taskQueue.TryDequeue(out var titem))
+                int i = 0;
+                while (i < currentSlaves.Count * 5 && taskQueue.TryDequeue(out var item))
                 {
-                    var slaveId = currentSlaves[assigned % n];
-                    assignments[slaveId].Add(titem);
-                    assigned++;
+                    batch[currentSlaves[i % currentSlaves.Count]].Add(item);
+                    i++;
                 }
 
-                foreach (var kv in assignments)
+                foreach (var kv in batch)
                 {
                     if (kv.Value.Count == 0) continue;
-                    if (!slaves.TryGetValue(kv.Key, out var client)) continue;
-                    try
+                    if (slaves.TryGetValue(kv.Key, out var client))
                     {
-                        var stream = client.GetStream();
                         var task = new TaskAssign { taskId = Guid.NewGuid().ToString(), texts = kv.Value.ToArray() };
-                        await TcpHelpers.SendJsonAsync(stream, task);
-                        OnLog?.Invoke($"Assigned {kv.Value.Count} texts to {kv.Key}");
-                    }
-                    catch (Exception ex)
-                    {
-                        OnLog?.Invoke($"Failed to send to {kv.Key}: {ex.Message}");
+                        _ = TcpHelpers.SendJsonAsync(client.GetStream(), task);
                     }
                 }
-
-                await Task.Delay(50, token).ContinueWith(_ => { });
+                await Task.Delay(50, token);
             }
         }
 
-        private Dictionary<string, Dictionary<string, double>> BuildSimilarityMatrix(string[] ids)
-        {
-            var vocab = new HashSet<string>();
-            foreach (var id in ids)
-                if (textCounts.TryGetValue(id, out var dict))
-                    foreach (var w in dict.Keys) vocab.Add(w);
+        // --- АЛГОРИТМ BM25 ---
+        //private Dictionary<string, Dictionary<string, double>> BuildBM25Matrix(string[] ids)
+        //{
+        //    // Коэффициенты BM25 (стандартные значения)
+        //    double k1 = 1.2;
+        //    double b = 0.75;
 
-            var vocabList = vocab.ToList();
-            var idx = vocabList.Select((w, i) => (w, i)).ToDictionary(x => x.w, x => x.i);
-            var vectors = new Dictionary<string, double[]>();
-            foreach (var id in ids)
-            {
-                var v = new double[vocabList.Count];
-                if (textCounts.TryGetValue(id, out var dict))
-                {
-                    double sum = dict.Values.Sum();
-                    if (sum == 0) sum = 1;
-                    foreach (var kv in dict)
-                        v[idx[kv.Key]] = kv.Value / sum;
-                }
-                vectors[id] = v;
-            }
+        //    var docFreq = new Dictionary<string, int>();
+        //    var docLengths = new Dictionary<string, int>();
+        //    long totalWords = 0;
+        //    int N = ids.Length; // Количество документов
 
-            var matrix = new Dictionary<string, Dictionary<string, double>>();
-            foreach (var a in ids)
-            {
-                matrix[a] = new Dictionary<string, double>();
-                foreach (var b in ids)
-                {
-                    double sim = Cosine(vectors[a], vectors[b]);
-                    matrix[a][b] = sim;
-                }
-            }
-            return matrix;
-        }
+        //    // 1. Сбор глобальной статистики (DF и длины документов)
+        //    var vocab = new HashSet<string>();
+        //    foreach (var id in ids)
+        //    {
+        //        if (textCounts.TryGetValue(id, out var counts))
+        //        {
+        //            // Длина документа = сумма всех вхождений слов
+        //            int len = counts.Values.Sum();
+        //            docLengths[id] = len;
+        //            totalWords += len;
+
+        //            foreach (var word in counts.Keys)
+        //            {
+        //                vocab.Add(word);
+        //                if (!docFreq.ContainsKey(word)) docFreq[word] = 0;
+        //                docFreq[word]++;
+        //            }
+        //        }
+        //        else
+        //        {
+        //            docLengths[id] = 0;
+        //        }
+        //    }
+
+        //    double avgdl = N > 0 ? (double)totalWords / N : 1;
+        //    var vocabList = vocab.ToList();
+        //    var wordIdx = vocabList.Select((w, i) => (w, i)).ToDictionary(x => x.w, x => x.i);
+
+        //    // 2. Построение векторов весов BM25
+        //    var vectors = new Dictionary<string, double[]>();
+
+        //    foreach (var id in ids)
+        //    {
+        //        var vector = new double[vocabList.Count];
+        //        if (textCounts.TryGetValue(id, out var counts))
+        //        {
+        //            int docLen = docLengths[id];
+        //            foreach (var kv in counts)
+        //            {
+        //                string word = kv.Key;
+        //                int tf = kv.Value; // Term Frequency (сколько раз слово в этом документе)
+
+        //                if (wordIdx.TryGetValue(word, out int idx))
+        //                {
+        //                    // IDF (Inverse Document Frequency)
+        //                    // Формула IDF для BM25 (с защитой от отрицательных значений)
+        //                    double df = docFreq[word];
+        //                    double idf = Math.Log((double)(N + 1) / (df + 1)) + 1.0;
+
+        //                    // Формула BM25 для веса
+        //                    double numerator = tf * (k1 + 1);
+        //                    double denominator = tf + k1 * (1 - b + b * (docLen / avgdl));
+
+        //                    // Итоговый вес слова в векторе
+        //                    vector[idx] = idf * (numerator / denominator);
+        //                }
+        //            }
+        //        }
+        //        vectors[id] = vector;
+        //    }
+
+        //    // 3. Косинусное сходство полученных векторов
+        //    var matrix = new Dictionary<string, Dictionary<string, double>>();
+
+        //    // Переименовали переменную цикла 'a' -> 'idA'
+        //    foreach (var idA in ids)
+        //    {
+        //        matrix[idA] = new Dictionary<string, double>();
+
+        //        // Переименовали переменную цикла 'b' -> 'idB', так как 'b' занято коэффициентом BM25
+        //        foreach (var idB in ids)
+        //        {
+        //            matrix[idA][idB] = Cosine(vectors[idA], vectors[idB]);
+        //        }
+        //    }
+        //    return matrix;
+        //}
 
         private double Cosine(double[] a, double[] b)
         {
-            double da = 0, db = 0, num = 0;
-            for (int i = 0; i < a.Length; i++) { num += a[i] * b[i]; da += a[i] * a[i]; db += b[i] * b[i]; }
-            if (da == 0 || db == 0) return 0;
-            return num / (Math.Sqrt(da) * Math.Sqrt(db));
+            double dot = 0, magA = 0, magB = 0;
+            for (int i = 0; i < a.Length; i++)
+            {
+                dot += a[i] * b[i];
+                magA += a[i] * a[i];
+                magB += b[i] * b[i];
+            }
+            if (magA == 0 || magB == 0) return 0;
+            return dot / (Math.Sqrt(magA) * Math.Sqrt(magB));
         }
     }
 }

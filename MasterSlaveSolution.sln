@@ -5,6 +5,8 @@ VisualStudioVersion = 17.14.36414.22
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MasterSlave", "MasterSlave\MasterSlave.csproj", "{278F8C22-95E1-4B44-9696-CA5C5DBD8BB6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MasterSlaveTests", "MasterSlaveTests\MasterSlaveTests.csproj", "{3D85667F-6167-49B5-80DE-1CC4FC62B795}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{278F8C22-95E1-4B44-9696-CA5C5DBD8BB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{278F8C22-95E1-4B44-9696-CA5C5DBD8BB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{278F8C22-95E1-4B44-9696-CA5C5DBD8BB6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D85667F-6167-49B5-80DE-1CC4FC62B795}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D85667F-6167-49B5-80DE-1CC4FC62B795}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D85667F-6167-49B5-80DE-1CC4FC62B795}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D85667F-6167-49B5-80DE-1CC4FC62B795}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
